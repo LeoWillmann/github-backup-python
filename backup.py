@@ -24,7 +24,7 @@ def backup_repo(token: str, repo: Repository.Repository, owner: str, dir: str):
     if (os.path.exists(path)):
         # git remote update
         logging.info(f"Updating repo with 'git remote update'")
-        subprocess.run(["git", "-C", f"{os.path.join(dir, repo.name + ".git")}", "remote", "update"], check=True)
+        subprocess.run(["git", "-C", f"{os.path.join(dir, repo.name + '.git')}", "remote", "update"], check=True)
     else:
         # git clone --mirror
         logging.info(f"New repo, creating mirror clone")
