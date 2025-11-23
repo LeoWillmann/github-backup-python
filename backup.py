@@ -1,4 +1,3 @@
-
 import os
 from dotenv import load_dotenv
 from github import Github, Auth, Repository
@@ -24,11 +23,11 @@ def backup_repo(token: str, repo: Repository.Repository, owner: str, dir: str):
     if (os.path.exists(path)):
         # git remote update
         logging.info(f"Updating repo with 'git remote update'")
-        subprocess.run(["git", "-C", f"{os.path.join(dir, repo.name + '.git')}", "remote", "update"], check=True)
+        subprocess.run(["git", "-C", f"{path}", "remote", "update"], check=True)
     else:
         # git clone --mirror
         logging.info(f"New repo, creating mirror clone")
-        subprocess.run(["git", "-C", f"{dir}", "clone", f"https://{token}@github.com/{owner}/{repo.name}.git", "--mirror"], check=True)
+        subprocess.run(["git", "-C", f"{os.path.join(base_dir, dir)}", "clone", f"https://{token}@github.com/{owner}/{repo.name}.git", "--mirror"], check=True)
     logging.info(f"Successfully backed up the repo '{repo.name}'")
 
 def main():
