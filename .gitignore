@@ -1,0 +1,13 @@
+# python virtual environments
+.venv/
+venv/
+env/
+
+# environment variables
+.env
+
+# backed up repositories
+repos/
+
+# log files
+*.log
