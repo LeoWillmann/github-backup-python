@@ -8,6 +8,7 @@ env/
 
 # backed up repositories
 repos/
+*.git/
 
 # log files
 *.log

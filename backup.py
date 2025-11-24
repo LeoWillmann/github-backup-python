@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from github import Github, Auth, Repository
+from github import Github, Auth, Repository, PaginatedList
 import subprocess
 import logging
 import datetime
@@ -16,42 +16,72 @@ def get_github(token:str):
     except:
         raise ValueError("Invalid token")
 
-def backup_repo(token: str, repo: Repository.Repository, owner: str, dir: str):
-    logging.info(f"Working on target repo '{repo.name}' (Private: {repo.private})")
+def backup_repo(token: str, repo: Repository.Repository, owner: str, dir: str)-> bool:  
     # Check if repository is present in dir relative to the file location
     path = os.path.join(base_dir, dir, repo.name + ".git")
-    if (os.path.exists(path)):
-        # git remote update
-        logging.info(f"Updating repo with 'git remote update'")
-        subprocess.run(["git", "-C", f"{path}", "remote", "update"], check=True)
+    if (not os.path.exists(path)):
+        # git clone --mirror once
+        url: str = f"https://{token}@github.com/{repo.full_name}.git"
+        logging.info(f"New target repo '{repo.full_name}' (Private: {repo.private}) cloned")
+        subprocess.run(["git", "-C", f"{os.path.join(base_dir, dir)}", "clone", url, "--mirror"], check=True)
+        return True
     else:
-        # git clone --mirror
-        logging.info(f"New repo, creating mirror clone")
-        subprocess.run(["git", "-C", f"{os.path.join(base_dir, dir)}", "clone", f"https://{token}@github.com/{owner}/{repo.name}.git", "--mirror"], check=True)
-    logging.info(f"Successfully backed up the repo '{repo.name}'")
+        # Dry-run fetch to see if anything new
+        result = subprocess.run(["git", "-C", f"{path}", "fetch", "--dry-run"], capture_output=True, text=True)
+        if result.stdout.strip() or result.stderr.strip():
+            # Only log if something new
+            subprocess.run(["git", "-C", f"{path}", "remote", "update" , "--prune"], check=True)
+            logging.info(f"Updated '{repo.full_name}' with new content")
+            return True
+    return False
 
 def main():
-    load_dotenv()
-    log_file = os.path.join(base_dir, os.getenv("LOG_FILE") or "logfile.log")
-    logging.basicConfig(filename=log_file, level=logging.INFO)
+    parsed: int = 0
+    updated: int = 0
+    repoCount: int = 0
     
+    load_dotenv()
+    # create logging
+    log_file = (os.path.join(base_dir, os.getenv("LOG_FILE") or "logfile")) + ".log"
+    logging.basicConfig(
+        filename=log_file, 
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    
+    start: datetime.datetime = datetime.datetime.now()
+    logging.info(f"Backup started")
     try:
-        logging.info(f"Backup started at {datetime.datetime.now().isoformat()}")
-        
+        # Get environment variables
         token: str = os.getenv('GIT_TOKEN_CLASSIC') or ""
         dir: str = os.getenv('BACKUP_DIR') or ""
         
+        # Create directory folder if it does not exist
         if (not os.path.exists(os.path.join(base_dir, dir))):
             os.mkdir(os.path.join(base_dir, dir))
-        g = get_github(token)
         
-        for repo in g.get_user().get_repos():
-            backup_repo(token, repo, repo.owner.login, dir)        
-
-        logging.info(f"Backup completed successfully at {datetime.datetime.now().isoformat()}")
+        # Get github repositories and back them up
+        g = get_github(token)
+        repos: PaginatedList.PaginatedList[Repository.Repository] = g.get_user().get_repos()
+        repoCount = repos.totalCount
+        for repo in repos:
+            parsed += 1
+            updated += 1 if backup_repo(token, repo, repo.owner.login, dir) else 0
+        
     except Exception as e:
         logging.error(f"Backup failed: {e}")
-    
+    finally:
+        end: datetime.datetime = datetime.datetime.now()
+        diff: datetime.timedelta = end - start
+        
+        if (repoCount == parsed):
+            logging.info(f"Backup completed successfully. Elapsed {diff.total_seconds()} seconds with" +
+                f" {parsed} repos parsed and {updated} updated")
+        else:
+            logging.warning(f"Could not parse all {repoCount} repos. Elapsed {diff.total_seconds()} seconds with" +
+                f" {parsed} repos parsed and {updated} updated")
+
     
 if __name__ == "__main__":
     main()
